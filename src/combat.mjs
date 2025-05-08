@@ -31,7 +31,6 @@ const on_combat_round = async (combat, updateData, updateOptions) => {
 export function set_combat_hooks() {
     Logger.info('Setting Combat Hooks.')
 
-    Logger.info(combat_hooks)
     const turn_off_hook = key => {
         if (combat_hooks[key]) {
             Hooks.off(key, combat_hooks[key])
@@ -199,9 +198,14 @@ function get_health(hp, combatHealthSetting, actorType) {
 }
 
 export function register_combat_settings_toggle() {
+    const hook_fun =
+        game.version < 13
+            ? 'prototype._updateObject'
+            : 'DEFAULT_OPTIONS.form.handler'
+
     libWrapper.register(
         'oronder',
-        'CombatTrackerConfig.prototype._updateObject',
+        `CombatTrackerConfig.${hook_fun}`,
         async function (wrapped, ...args) {
             await game.settings.set(
                 MODULE_ID,
@@ -214,24 +218,59 @@ export function register_combat_settings_toggle() {
         'WRAPPER'
     )
 
-    Hooks.on('renderCombatTrackerConfig', async (application, $html, _) => {
-        $('<div/>', {class: 'form-group'})
-            .append(
-                $('<label/>', {
-                    text: game.i18n.localize(
-                        'oronder.Publish-Combat-Tracker-To-Discord'
-                    ),
-                    for: 'oronder_combat_tracker_toggle'
-                }),
-                $('<input/>', {
-                    type: 'checkbox',
-                    id: 'oronder_combat_tracker_toggle',
-                    checked: game.settings.get(MODULE_ID, COMBAT_ENABLED)
-                })
-            )
-            .insertBefore($html.find('form button').last())
+    Hooks.on('renderCombatTrackerConfig', async (combatTrackerConfig, html) => {
+        if (game.version < 13) {
+            $('<div/>', {class: 'form-group'})
+                .append(
+                    $('<label/>', {
+                        text: game.i18n.localize(
+                            'oronder.Publish-Combat-Tracker-To-Discord'
+                        ),
+                        for: 'oronder_combat_tracker_toggle'
+                    }),
+                    $('<input/>', {
+                        type: 'checkbox',
+                        id: 'oronder_combat_tracker_toggle',
+                        checked: game.settings.get(MODULE_ID, COMBAT_ENABLED)
+                    })
+                )
+                .insertBefore(html.find('form button').last())
+        } else {
+            const formGroup = document.createElement('div')
+            formGroup.className = 'form-group'
 
-        auto_resize(application)
+            const label = document.createElement('label')
+            label.textContent = game.i18n.localize(
+                'oronder.Publish-Combat-Tracker-To-Discord'
+            )
+            label.htmlFor = 'oronder_combat_tracker_toggle'
+
+            const formFields = document.createElement('div')
+            formFields.className = 'form-fields'
+
+            const input = document.createElement('input')
+            input.type = 'checkbox'
+            input.id = 'oronder_combat_tracker_toggle'
+            input.checked = game.settings.get(MODULE_ID, COMBAT_ENABLED)
+
+            const hint = document.createElement('p')
+            hint.className = 'hint'
+            hint.appendChild(
+                document.createTextNode(
+                    'On Turn and Round Changes, updates will be published to Discord.'
+                )
+            )
+
+            formGroup.appendChild(label)
+            formGroup.appendChild(formFields)
+            formFields.appendChild(input)
+            formGroup.appendChild(hint)
+
+            const last_div = html.querySelector(
+                'div.form-group[data-setting-id="core.combatTheme"]'
+            )
+            last_div.parentNode.insertBefore(formGroup, last_div)
+        }
+        auto_resize(combatTrackerConfig)
     })
 }
-

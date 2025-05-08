@@ -33,6 +33,17 @@ function prune_roll_data({
         pc.abilities[key] = (({checkProf, saveProf, bonuses, ...o}) => o)(
             pc.abilities[key]
         )
+
+        //TODO This is a hack to avoid changing the backend.
+        // dnd5e 4.3.3 adds a toJSON method that converts it to a string.
+        // dnd5e 4.3.0 changes save from an int to an object.
+        if (typeof pc.abilities[key].save === 'string') {
+            pc.abilities[key].save = parseInt(
+                pc.abilities[key].save.replaceAll('!', '')
+            )
+        } else if (typeof pc.abilities[key].save === 'object') {
+            pc.abilities[key].save = pc.abilities[key].save.value
+        }
     }
 
     pc.details = (({originalClass, ...o}) => o)(pc.details)
@@ -44,6 +55,13 @@ function prune_roll_data({
     pc.attributes.hp = (({value, temp, tempmax, bonuses, ...o}) => o)(
         pc.attributes.hp
     )
+
+    //TODO This is a hack to avoid changing the backend.
+    // dnd5e 4.3.0 changes moves spell info under spell.
+    if ('spell' in pc.attributes) {
+        pc.attributes.spelldc = pc.attributes.spell.dc
+        pc.attributes.spellmod = pc.attributes.spell.mod
+    }
 
     for (let class_name in pc.classes) {
         pc.classes[class_name] = (({
@@ -109,7 +127,7 @@ function export_item(item) {
  * @param {string} url
  */
 function fix_relative_url(url) {
-    return url.indexOf('http://') === 0 || url.indexOf('https://') === 0
+    return !url || url.indexOf('http://') === 0 || url.indexOf('https://') === 0
         ? url
         : new URL(url, window.location.origin).href
 }
@@ -270,17 +288,52 @@ export async function full_sync(clear_cache) {
 /**
  @param {Actor} actor
  */
-export async function sync_actor(actor) {
+export function syncable(actor) {
     if (actor.type !== 'character') {
         Logger.info(
             `${game.i18n.localize('oronder.Skipping-Sync-For')} ${actor.name}. ${game.i18n.localize('oronder.NPC')}`
         )
-        return Promise.resolve()
+        return false
     }
     if (!actor_to_discord_ids(actor).length) {
         Logger.info(
             `${game.i18n.localize('oronder.Skipping-Sync-For')} ${actor.name}. ${game.i18n.localize('oronder.No-Owner')}`
         )
+        return false
+    }
+    if (!actor.system.details.level) {
+        Logger.info(
+            `${game.i18n.localize('oronder.Skipping-Sync-For')} ${actor.name}. ${game.i18n.localize('oronder.No-Level')}`
+        )
+        return false
+    }
+    if (!actor.system.details.race) {
+        Logger.info(
+            `${game.i18n.localize('oronder.Skipping-Sync-For')} ${actor.name}. ${game.i18n.localize('oronder.No-Race')}`
+        )
+        return false
+    }
+    if (!actor.system.details.background) {
+        Logger.info(
+            `${game.i18n.localize('oronder.Skipping-Sync-For')} ${actor.name}. ${game.i18n.localize('oronder.No-Background')}`
+        )
+        return false
+    }
+    if (!Object.keys(actor.classes).length) {
+        Logger.info(
+            `${game.i18n.localize('oronder.Skipping-Sync-For')} ${actor.name}. ${game.i18n.localize('oronder.No-Class')}`
+        )
+        return false
+    }
+
+    return true
+}
+
+/**
+ @param {Actor} actor
+ */
+export async function sync_actor(actor) {
+    if (!syncable(actor)) {
         return Promise.resolve()
     }
 
@@ -291,30 +344,6 @@ export async function sync_actor(actor) {
     if (old_hash && old_hash === new_hash) {
         Logger.info(
             `${game.i18n.localize('oronder.Skipping-Sync-For')} ${actor_obj.name}. ${game.i18n.localize('oronder.No-Change')}`
-        )
-        return Promise.resolve()
-    }
-    if (!actor_obj.details.level) {
-        Logger.info(
-            `${game.i18n.localize('oronder.Skipping-Sync-For')} ${actor_obj.name}. ${game.i18n.localize('oronder.No-Level')}`
-        )
-        return Promise.resolve()
-    }
-    if (!actor_obj.details.race) {
-        Logger.info(
-            `${game.i18n.localize('oronder.Skipping-Sync-For')} ${actor_obj.name}. ${game.i18n.localize('oronder.No-Race')}`
-        )
-        return Promise.resolve()
-    }
-    if (!actor_obj.details.background) {
-        Logger.info(
-            `${game.i18n.localize('oronder.Skipping-Sync-For')} ${actor_obj.name}. ${game.i18n.localize('oronder.No-Background')}`
-        )
-        return Promise.resolve()
-    }
-    if (!Object.keys(actor_obj.classes).length) {
-        Logger.info(
-            `${game.i18n.localize('oronder.Skipping-Sync-For')} ${actor_obj.name}. ${game.i18n.localize('oronder.No-Class')}`
         )
         return Promise.resolve()
     }

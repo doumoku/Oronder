@@ -43,7 +43,7 @@ function rolls_to_str(rolls) {
  @param {string} foundry_user_id
  @return Object
  */
-async function incoming_attack(actor, data, event, foundry_user_id) {
+async function incoming_attack(actor, data, foundry_user_id) {
     const item = actor.items.find(i => i.id === data.item_id)
 
     if (item === undefined) {
@@ -51,59 +51,43 @@ async function incoming_attack(actor, data, event, foundry_user_id) {
         return {}
     }
 
-    let atk
-    let dmg
+    let activity = item.system.activities.getByType('attack')[0]
 
-    if ('activities' in item.system) {
-        //dnd5e 4.0+
-        let activity = item.system.activities.getByType('attack')[0]
-
-        if ('spell_level' in data) {
-            activity = item
-                .clone(
-                    {
-                        'flags.dnd5e.scaling':
-                            data.spell_level - item.system.level
-                    },
-                    {keepId: true}
-                )
-                .system.activities.get(activity.id)
-        }
-
-        atk = (
-            await activity.rollAttack(
-                {attackMode: data.attack_mode, event: event},
-                {configure: false},
-                {data: {user: foundry_user_id}}
+    if ('spell_level' in data) {
+        activity = item
+            .clone(
+                {
+                    'flags.dnd5e.scaling': data.spell_level - item.system.level
+                },
+                {keepId: true}
             )
-        )[0]
-
-        dmg = (
-            await activity.rollDamage(
-                {attackMode: data.attack_mode, event: {altKey: atk.isCritical}},
-                {configure: false},
-                {data: {user: foundry_user_id}}
-            )
-        )[0]
-    } else {
-        atk = await item.rollAttack({
-            fastForward: true,
-            advantage: data.advantage === 'Advantage',
-            disadvantage: data.advantage === 'Disadvantage'
-        })
-
-        dmg = await item.rollDamage({
-            options: {
-                fastForward: true
-            },
-            spellLevel: data.spell_level,
-            critical: atk.isCritical
-        })
+            .system.activities.get(activity.id)
     }
+
+    const atk = (
+        await activity.rollAttack(
+            {
+                attackMode: data.attack_mode,
+                advantage: data.advantage === 'Advantage',
+                disadvantage: data.advantage === 'Disadvantage'
+            },
+            {configure: false},
+            {data: {user: foundry_user_id}}
+        )
+    )[0]
+
+    const dmg = await activity.rollDamage(
+        {
+            attackMode: data.attack_mode,
+            isCritical: atk.isCritical
+        },
+        {configure: false},
+        {data: {user: foundry_user_id}}
+    )
 
     return {
         atk: rolls_to_str(atk),
-        dmg: rolls_to_str(dmg)
+        dmg: dmg.map(d => [rolls_to_str(d), d.options.type])
     }
 }
 
@@ -128,7 +112,9 @@ async function incoming_initiative(actor, event) {
     // Temporarily cache the configured roll and use it to roll initiative for the Actor
     actor._cachedInitiativeRoll = rolls[0]
     const combat = await actor.rollInitiative({
-        createCombatants: true,
+        createCombatants: !game.combat.combatants.some(
+            a => a.actorId === actor.id
+        ),
         rerollInitiative: true
     })
 
@@ -143,6 +129,13 @@ async function incoming_initiative(actor, event) {
 
 export function set_incoming_hooks() {
     socket.on('roll', async (data, callback) => {
+        if (game.version < 12) {
+            Logger.info(
+                `rolling ${data['type']} requires Foundry v12 or later.`
+            )
+            callback({})
+            return
+        }
         const actor = game.actors.find(a => a.id === data.actor_id)
         if (actor === undefined) {
             Logger.error(game.i18n.localize('oronder.Actor-Not-Found'))
@@ -163,7 +156,7 @@ export function set_incoming_hooks() {
                 out = await incoming_initiative(actor, event)
                 break
             case 'attack':
-                out = await incoming_attack(actor, data, event, foundry_user_id)
+                out = await incoming_attack(actor, data, foundry_user_id)
                 break
             case 'save':
                 out = {
@@ -215,15 +208,16 @@ export function set_incoming_hooks() {
                         res: 'You may not make a Concentration Saving Throw with this Actor.',
                         ephemeral: true
                     }
-                }
-                out = {
-                    res: rolls_to_str(
-                        await actor.rollConcentration(
-                            {event: event},
-                            {configure: false},
-                            {data: {user: foundry_user_id}}
+                } else {
+                    out = {
+                        res: rolls_to_str(
+                            await actor.rollConcentration(
+                                {event: event},
+                                {configure: false},
+                                {data: {user: foundry_user_id}}
+                            )
                         )
-                    )
+                    }
                 }
                 break
             case 'death':

@@ -5,8 +5,9 @@
   "version": "#{TAG}#",
   "library": "false",
   "compatibility": {
-    "minimum": 11.303,
-    "verified": 12.331
+    "minimum": 11.0,
+    "verified": 13.342,
+    "maximum": "13.999"
   },
   "authors": [
     {
@@ -21,9 +22,9 @@
         "id": "dnd5e",
         "manifest": "https://raw.githubusercontent.com/foundryvtt/dnd5e/master/system.json",
         "compatibility": {
-          "minimum": "3.1.0",
-          "verified": "4.1.2",
-          "maximum": "4.9.999"
+          "minimum": "4.2.0",
+          "verified": "5.0.1",
+          "maximum": "5.0.999"
         }
       }
     ],
@@ -33,7 +34,7 @@
         "type": "module",
         "compatibility": {
           "minimum": "1.0.0.0",
-          "verified": "1.12.15.0"
+          "verified": "1.13.2.0"
         }
       }
     ]
@@ -50,10 +51,15 @@
       "lang": "ja",
       "name": "日本語",
       "path": "languages/ja.json"
+    },
+    {
+      "lang": "es",
+      "name": "Español",
+      "path": "languages/es.json"
     }
   ],
   "socket": true,
-  "url": "https://discord.gg/ZggUCHsQqg",
+  "url": "https://discord.gg/Adg48Xrs6K",
   "bugs": "#{GITHUB_URL}#/issues",
   "manifest": "#{GITHUB_URL}#/releases/latest/download/module.json",
   "download": "#{GITHUB_URL}#/releases/download/#{TAG}#/module.zip",
